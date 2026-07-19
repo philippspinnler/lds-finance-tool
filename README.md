@@ -31,7 +31,7 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
    **„Installierte Userscripte"** → **„+"** (Neues Script erstellen).
 3. **Script einfügen**: Den vorgegebenen Inhalt des Editors komplett löschen,
    den gesamten Inhalt von
-   [`beschreibung-formatter.user.js`](beschreibung-formatter.user.js)
+   [`lds-finance-tool.user.js`](lds-finance-tool.user.js)
    hineinkopieren und mit **Strg+S** (bzw. Datei → Speichern) speichern.
 4. **Fertig**: Die Finanzseite auf `churchofjesuschrist.org` (neu) laden. Das
    Script läuft automatisch auf allen Seiten, die auf
