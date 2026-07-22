@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.4
+// @version      1.5
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -63,10 +63,13 @@
     addLine('Name', name);
     addLine('Zweck', zweck);
 
-    if (name && rawText !== lastSpenderRaw) {
+    if (rawText !== lastSpenderRaw) {
       lastSpenderRaw = rawText;
-      const cleanName = name.split(' (')[0];
-      setTimeout(() => trySelectSpender(cleanName), 300);
+      recordEpoch++;
+      if (name) {
+        const cleanName = name.split(' (')[0];
+        setTimeout(() => trySelectSpender(cleanName), 300);
+      }
     }
 
     const totalRaw = extract('Amt', rawText);
@@ -272,6 +275,9 @@
 
   let lastSpenderRaw = null;
 
+  // Zählt die Datensatz-Wechsel (jede neu verarbeitete Bank-Beschreibung).
+  let recordEpoch = 0;
+
   let pendingAmounts = null;
 
   function attemptFill() {
@@ -359,15 +365,25 @@
   // "Spenden" setzen, sobald der zugehörige Betrag einen Wert hat (die
   // Seite befüllt ihn aus der Banktransaktion, das Feld ist meist
   // schreibgeschützt). Verwendungszweck und Betrag sind ein Paar
-  // ("beide oder keins"-Validierung). Nur einmal pro Feld, damit ein
-  // bewusst geleertes Feld leer bleibt.
+  // ("beide oder keins"-Validierung).
+  //
+  // Einmal pro Datensatz (nicht pro Element): beim Wechsel der Spende
+  // verwendet die Seite dasselbe Eingabefeld weiter, zeigt aber noch den
+  // alten Text an, ohne ihn in den Zustand des neuen Datensatzes zu
+  // übernehmen. Darum wird nach jedem Wechsel neu "getippt": ein leeres
+  // Feld bekommt den Standardwert, ein angezeigter Text wird erneut
+  // eingegeben, damit er auch für den neuen Datensatz gilt. Innerhalb
+  // desselben Datensatzes bleibt ein bewusst geleertes Feld leer.
   function maybePrefillVerwendungszweck(input) {
-    if (input.dataset.ubfPrefilled) return;
-    if (input.value.trim() !== '' || document.activeElement === input) return;
+    if (input.dataset.ubfEpoch === String(recordEpoch)) return;
+    if (document.activeElement === input) return;
     const betrag = findPairedBetragInput(input);
     if (!betrag || betrag.value.trim() === '') return;
-    input.dataset.ubfPrefilled = '1';
-    typeInputValue(input, DEFAULT_VERWENDUNGSZWECK);
+    input.dataset.ubfEpoch = String(recordEpoch);
+    const value = input.value.trim() === ''
+      ? DEFAULT_VERWENDUNGSZWECK
+      : input.value;
+    typeInputValue(input, value);
   }
 
   function processTextNode(node) {
