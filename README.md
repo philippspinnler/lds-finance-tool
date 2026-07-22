@@ -24,7 +24,10 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
   „TN Beiträge für Veranstaltungen der Gemeinde"). **„Spenden" wird
   automatisch gesetzt, sobald das zugehörige Betrag-Feld einen Wert hat**
   (Verwendungszweck und Betrag sind auf der Seite ein Pflicht-Paar; ein
-  bewusst geleertes Feld wird nicht erneut befüllt).
+  bewusst geleertes Feld wird nicht erneut befüllt). Wie bei den Beträgen
+  greift die Automatik nur, wenn der Zweck ein bekanntes Kürzel enthält
+  oder leer ist — bei sonstigem Freitext bleibt das Feld leer und wird
+  manuell befüllt.
 
 ## Installation (Firefox + Tampermonkey)
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.8
+// @version      1.9
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -66,6 +66,9 @@
     if (rawText !== lastSpenderRaw) {
       lastSpenderRaw = rawText;
       recordEpoch++;
+      // Automatik (Beträge wie Verwendungszweck-Standard) nur, wenn der
+      // Zweck ein bekanntes Kürzel enthält oder leer ist.
+      recordZweckAutoOk = !zweck || !zweck.trim() || !!findKeyField(zweck);
       if (name) {
         const cleanName = name.split(' (')[0];
         setTimeout(() => trySelectSpender(cleanName), 300);
@@ -287,6 +290,10 @@
   // Zählt die Datensatz-Wechsel (jede neu verarbeitete Bank-Beschreibung).
   let recordEpoch = 0;
 
+  // Darf der aktuelle Datensatz automatisch befüllt werden?
+  // (Zweck leer oder mit bekanntem Kürzel.)
+  let recordZweckAutoOk = true;
+
   let pendingAmounts = null;
 
   function attemptFill() {
@@ -421,6 +428,13 @@
   // verteilen, danach nur weitermachen, wenn die Paar-Fehlermeldung
   // neben dem Feld noch angezeigt wird.
   async function fillAndVerifyVerwendungszweck(input, epoch) {
+    // Zweck ohne bekanntes Kürzel: keinen Standardwert einsetzen — nur den
+    // veralteten Anzeigetext des vorherigen Datensatzes entfernen, damit
+    // das Feld ehrlich leer ist und manuell befüllt werden kann.
+    if (!recordZweckAutoOk) {
+      if (input.value.trim() !== '') typeInputValue(input, '');
+      return;
+    }
     const gaps = [0, 800, 1200, 1600, 2400, 4000];
     for (let i = 0; i < gaps.length; i++) {
       if (gaps[i]) await delay(gaps[i]);
