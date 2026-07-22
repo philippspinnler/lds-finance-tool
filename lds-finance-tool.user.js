@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.6
+// @version      1.7
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -345,12 +345,20 @@
 
   // Simuliert eine echte Eingabe (Fokus, Tippen, Verlassen), damit die
   // Seiten-App den Wert sicher in ihren Formular-Zustand übernimmt.
+  // Wichtig: erst leeren, dann setzen — React meldet onChange nur, wenn
+  // sich der Wert aus seiner Sicht ändert. Zeigt das Feld denselben Text
+  // bereits an (nur im DOM, nicht mehr im Zustand), wäre direktes Setzen
+  // ein No-Op und der Zustand bliebe leer.
   function typeInputValue(input, value) {
     const prev = document.activeElement;
-    input.focus();
     const setter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype, 'value'
     ).set;
+    input.focus();
+    setter.call(input, '');
+    input.dispatchEvent(new InputEvent('input', {
+      bubbles: true, inputType: 'deleteContentBackward',
+    }));
     setter.call(input, value);
     input.dispatchEvent(new InputEvent('input', {
       bubbles: true, data: value, inputType: 'insertText',
@@ -398,20 +406,22 @@
   // Nach einem Datensatz-Wechsel lädt die Seite den Datensatz asynchron
   // nach und überschreibt dabei den Formular-Zustand — ein zu früh
   // getippter Wert geht dort wieder verloren, obwohl er im Feld sichtbar
-  // bleibt. Darum: tippen, kurz warten, und solange die Paar-Fehlermeldung
-  // neben dem Feld noch angezeigt wird, erneut tippen.
+  // bleibt. Solange die Ladephase läuft, gibt es kein verlässliches
+  // "angekommen"-Signal (die Fehlermeldung erscheint erst nach dem Laden).
+  // Darum: die ersten Versuche bedingungslos über das Ladefenster
+  // verteilen, danach nur weitermachen, wenn die Paar-Fehlermeldung
+  // neben dem Feld noch angezeigt wird.
   async function fillAndVerifyVerwendungszweck(input, epoch) {
-    for (const ms of [0, 800, 1600, 3200]) {
-      if (ms) await delay(ms);
+    const gaps = [0, 800, 1200, 1600, 2400, 4000];
+    for (let i = 0; i < gaps.length; i++) {
+      if (gaps[i]) await delay(gaps[i]);
       if (recordEpoch !== epoch || !input.isConnected) return;
       if (document.activeElement === input) return;
+      if (i >= 4 && !vzErrorVisible(input)) return;
       const value = input.value.trim() === ''
         ? DEFAULT_VERWENDUNGSZWECK
         : input.value;
       typeInputValue(input, value);
-      await delay(400);
-      if (recordEpoch !== epoch || !input.isConnected) return;
-      if (!vzErrorVisible(input)) return;
     }
   }
 
