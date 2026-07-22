@@ -19,6 +19,9 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
   Standardfeld (Zehnter) zugeordnet, wenn der Zweck ein bekanntes Kürzel
   enthält oder leer ist — sonstiger Freitext bleibt zur manuellen Zuordnung
   offen.
+- **Alle Checkboxen anhaken**: Auf Seiten mit mehreren Checkboxen (z. B.
+  Spendenlisten zum Abhaken) erscheint unten rechts ein Knopf
+  „☑ Alle auswählen", der alle sichtbaren Checkboxen auf einmal anhakt.
 - **Verwendungszweck-Vorschläge**: Das Verwendungszweck-Feld erhält eine
   Auswahlliste („Spenden", „TN Beiträge für Veranstaltungen des Pfahles",
   „TN Beiträge für Veranstaltungen der Gemeinde"). **„Spenden" wird

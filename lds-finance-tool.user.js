@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.11
+// @version      1.12
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -455,6 +455,53 @@
     }
   }
 
+  // --- Knopf: alle Checkboxen auf der Seite anhaken ---
+  const CHECK_ALL_ID = 'ubf-check-all-button';
+
+  function checkableBoxes() {
+    return Array.from(
+      document.querySelectorAll('input[type="checkbox"]')
+    ).filter((cb) => !cb.disabled && cb.getClientRects().length > 0);
+  }
+
+  function updateCheckAllButton() {
+    const boxes = checkableBoxes();
+    let btn = document.getElementById(CHECK_ALL_ID);
+    // Erst ab zwei Checkboxen anzeigen, damit der Knopf nicht auf Seiten
+    // mit einer einzelnen Checkbox (Dialoge, Filter) auftaucht.
+    if (boxes.length < 2) {
+      if (btn) btn.remove();
+      return;
+    }
+    if (btn) return;
+    btn = document.createElement('button');
+    btn.id = CHECK_ALL_ID;
+    btn.type = 'button';
+    btn.textContent = '☑ Alle auswählen';
+    Object.assign(btn.style, {
+      position: 'fixed',
+      right: '16px',
+      bottom: '16px',
+      zIndex: '99999',
+      padding: '10px 14px',
+      background: '#006184',
+      color: '#fff',
+      border: 'none',
+      borderRadius: '4px',
+      font: '600 14px sans-serif',
+      cursor: 'pointer',
+      boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+    });
+    btn.addEventListener('click', () => {
+      // Echter click(): setzt den Haken und löst das change-Event aus,
+      // das die Seiten-App erwartet.
+      checkableBoxes().forEach((cb) => {
+        if (!cb.checked) cb.click();
+      });
+    });
+    document.body.appendChild(btn);
+  }
+
   function processTextNode(node) {
     const text = node.nodeValue;
     if (!text || !/<(Nm|Ustrd)>/.test(text)) return;
@@ -477,6 +524,7 @@
     hits.forEach(processTextNode);
     enhanceVerwendungszweckInputs(root);
     attemptFill();
+    updateCheckAllButton();
   }
 
   let scheduled = false;
