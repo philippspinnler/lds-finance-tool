@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.3
+// @version      1.4
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -321,42 +321,53 @@
         input.setAttribute('list', DATALIST_ID);
         input.autocomplete = 'off';
       }
-      // "Spenden" automatisch setzen, sobald der zugehörige Betrag
-      // eingetragen wird. Nicht schon beim Laden vorbelegen: Verwendungszweck
-      // und Betrag sind ein Paar ("beide oder keins"-Validierung der Seite),
-      // ein vorbefülltes Feld ohne Betrag löst sonst einen Fehler aus.
-      if (!input.dataset.ubfPairBound) {
-        const betrag = findPairedBetragInput(input);
-        if (betrag) {
-          input.dataset.ubfPairBound = '1';
-          const fillDefault = () => {
-            if (betrag.value.trim() !== '' && input.value.trim() === '') {
-              setInputValue(input, DEFAULT_VERWENDUNGSZWECK);
-            }
-          };
-          betrag.addEventListener('input', fillDefault);
-          fillDefault();
-        }
-      }
+      maybePrefillVerwendungszweck(input);
     });
   }
 
-  // Findet das zum Verwendungszweck gehörende Betrag-Feld in derselben
-  // Formularzeile.
+  // Findet das zum Verwendungszweck gehörende Betrag-Feld: das nächste
+  // Währungsfeld (data-qa="currencyInput") im umschließenden Container.
   function findPairedBetragInput(vzInput) {
     let ancestor = vzInput.parentElement;
-    for (let i = 0; i < 6 && ancestor; i++) {
-      const others = Array.from(
-        ancestor.querySelectorAll('input:not([type="hidden"])')
-      ).filter((el) => el !== vzInput);
-      const betrag = others.find((el) =>
-        (el.placeholder || '').toLowerCase().includes('betrag'));
+    for (let i = 0; i < 8 && ancestor; i++) {
+      const betrag = ancestor.querySelector('input[data-qa="currencyInput"]');
       if (betrag) return betrag;
-      if (others.length === 1) return others[0];
-      if (others.length > 1) return null;
       ancestor = ancestor.parentElement;
     }
     return null;
+  }
+
+  // Simuliert eine echte Eingabe (Fokus, Tippen, Verlassen), damit die
+  // Seiten-App den Wert sicher in ihren Formular-Zustand übernimmt.
+  function typeInputValue(input, value) {
+    const prev = document.activeElement;
+    input.focus();
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype, 'value'
+    ).set;
+    setter.call(input, value);
+    input.dispatchEvent(new InputEvent('input', {
+      bubbles: true, data: value, inputType: 'insertText',
+    }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.blur();
+    if (prev && prev !== document.body && typeof prev.focus === 'function') {
+      prev.focus();
+    }
+  }
+
+  // "Spenden" setzen, sobald der zugehörige Betrag einen Wert hat (die
+  // Seite befüllt ihn aus der Banktransaktion, das Feld ist meist
+  // schreibgeschützt). Verwendungszweck und Betrag sind ein Paar
+  // ("beide oder keins"-Validierung). Nur einmal pro Feld, damit ein
+  // bewusst geleertes Feld leer bleibt.
+  function maybePrefillVerwendungszweck(input) {
+    if (input.dataset.ubfPrefilled) return;
+    if (input.value.trim() !== '' || document.activeElement === input) return;
+    const betrag = findPairedBetragInput(input);
+    if (!betrag || betrag.value.trim() === '') return;
+    input.dataset.ubfPrefilled = '1';
+    typeInputValue(input, DEFAULT_VERWENDUNGSZWECK);
   }
 
   function processTextNode(node) {
