@@ -18,8 +18,10 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
   erscheint eine Warnung.
 - **Verwendungszweck-Vorschläge**: Das Verwendungszweck-Feld erhält eine
   Auswahlliste („Spenden", „TN Beiträge für Veranstaltungen des Pfahles",
-  „TN Beiträge für Veranstaltungen der Gemeinde"). **„Spenden" wird als
-  Standardwert vorbelegt**, solange das Feld leer ist.
+  „TN Beiträge für Veranstaltungen der Gemeinde"). **„Spenden" wird
+  automatisch gesetzt, sobald im zugehörigen Betrag-Feld ein Betrag
+  eingetragen wird** (Verwendungszweck und Betrag sind auf der Seite ein
+  Pflicht-Paar; ein Wert ohne Betrag würde einen Validierungsfehler auslösen).
 
 ## Installation (Firefox + Tampermonkey)
 

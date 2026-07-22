@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.2
+// @version      1.3
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -321,30 +321,42 @@
         input.setAttribute('list', DATALIST_ID);
         input.autocomplete = 'off';
       }
-      // "Spenden" als Standardwert vorbelegen — nur einmal pro Feld,
-      // damit ein bewusst geleertes Feld nicht erneut befüllt wird.
-      if (!input.dataset.ubfPrefilled) {
-        input.dataset.ubfPrefilled = '1';
-        prefillVerwendungszweck(input);
+      // "Spenden" automatisch setzen, sobald der zugehörige Betrag
+      // eingetragen wird. Nicht schon beim Laden vorbelegen: Verwendungszweck
+      // und Betrag sind ein Paar ("beide oder keins"-Validierung der Seite),
+      // ein vorbefülltes Feld ohne Betrag löst sonst einen Fehler aus.
+      if (!input.dataset.ubfPairBound) {
+        const betrag = findPairedBetragInput(input);
+        if (betrag) {
+          input.dataset.ubfPairBound = '1';
+          const fillDefault = () => {
+            if (betrag.value.trim() !== '' && input.value.trim() === '') {
+              setInputValue(input, DEFAULT_VERWENDUNGSZWECK);
+            }
+          };
+          betrag.addEventListener('input', fillDefault);
+          fillDefault();
+        }
       }
     });
   }
 
-  // Verzögert vorbelegen: unmittelbar nach dem Einfügen des Feldes hat die
-  // Seiten-App ihre Event-Handler teils noch nicht angebunden — ein sofort
-  // gesetzter Wert landet dann nur im DOM, nicht im Formular-Zustand, und
-  // die Validierung meldet das Feld als leer.
-  async function prefillVerwendungszweck(input) {
-    await delay(400);
-    for (let i = 0; i < 5; i++) {
-      if (!input.isConnected || input.value.trim() !== '' ||
-          document.activeElement === input) return;
-      setInputValue(input, DEFAULT_VERWENDUNGSZWECK);
-      await delay(300);
-      // Wert blieb stehen -> fertig; sonst hat die Seite ihn zurückgesetzt,
-      // dann erneut versuchen.
-      if (input.value.trim() !== '') return;
+  // Findet das zum Verwendungszweck gehörende Betrag-Feld in derselben
+  // Formularzeile.
+  function findPairedBetragInput(vzInput) {
+    let ancestor = vzInput.parentElement;
+    for (let i = 0; i < 6 && ancestor; i++) {
+      const others = Array.from(
+        ancestor.querySelectorAll('input:not([type="hidden"])')
+      ).filter((el) => el !== vzInput);
+      const betrag = others.find((el) =>
+        (el.placeholder || '').toLowerCase().includes('betrag'));
+      if (betrag) return betrag;
+      if (others.length === 1) return others[0];
+      if (others.length > 1) return null;
+      ancestor = ancestor.parentElement;
     }
+    return null;
   }
 
   function processTextNode(node) {
