@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.5
+// @version      1.6
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -380,10 +380,39 @@
     const betrag = findPairedBetragInput(input);
     if (!betrag || betrag.value.trim() === '') return;
     input.dataset.ubfEpoch = String(recordEpoch);
-    const value = input.value.trim() === ''
-      ? DEFAULT_VERWENDUNGSZWECK
-      : input.value;
-    typeInputValue(input, value);
+    fillAndVerifyVerwendungszweck(input, recordEpoch);
+  }
+
+  // Zeigt die Seite neben dem Feld noch die Paar-Fehlermeldung an?
+  function vzErrorVisible(input) {
+    let ancestor = input.parentElement;
+    for (let i = 0; i < 3 && ancestor; i++) {
+      for (const el of ancestor.children) {
+        if (el.textContent.includes('Verwendungszweck-Nummer')) return true;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    return false;
+  }
+
+  // Nach einem Datensatz-Wechsel lädt die Seite den Datensatz asynchron
+  // nach und überschreibt dabei den Formular-Zustand — ein zu früh
+  // getippter Wert geht dort wieder verloren, obwohl er im Feld sichtbar
+  // bleibt. Darum: tippen, kurz warten, und solange die Paar-Fehlermeldung
+  // neben dem Feld noch angezeigt wird, erneut tippen.
+  async function fillAndVerifyVerwendungszweck(input, epoch) {
+    for (const ms of [0, 800, 1600, 3200]) {
+      if (ms) await delay(ms);
+      if (recordEpoch !== epoch || !input.isConnected) return;
+      if (document.activeElement === input) return;
+      const value = input.value.trim() === ''
+        ? DEFAULT_VERWENDUNGSZWECK
+        : input.value;
+      typeInputValue(input, value);
+      await delay(400);
+      if (recordEpoch !== epoch || !input.isConnected) return;
+      if (!vzErrorVisible(input)) return;
+    }
   }
 
   function processTextNode(node) {
