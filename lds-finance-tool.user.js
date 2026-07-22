@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.1
+// @version      1.2
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -325,11 +325,26 @@
       // damit ein bewusst geleertes Feld nicht erneut befüllt wird.
       if (!input.dataset.ubfPrefilled) {
         input.dataset.ubfPrefilled = '1';
-        if (input.value.trim() === '' && document.activeElement !== input) {
-          setInputValue(input, DEFAULT_VERWENDUNGSZWECK);
-        }
+        prefillVerwendungszweck(input);
       }
     });
+  }
+
+  // Verzögert vorbelegen: unmittelbar nach dem Einfügen des Feldes hat die
+  // Seiten-App ihre Event-Handler teils noch nicht angebunden — ein sofort
+  // gesetzter Wert landet dann nur im DOM, nicht im Formular-Zustand, und
+  // die Validierung meldet das Feld als leer.
+  async function prefillVerwendungszweck(input) {
+    await delay(400);
+    for (let i = 0; i < 5; i++) {
+      if (!input.isConnected || input.value.trim() !== '' ||
+          document.activeElement === input) return;
+      setInputValue(input, DEFAULT_VERWENDUNGSZWECK);
+      await delay(300);
+      // Wert blieb stehen -> fertig; sonst hat die Seite ihn zurückgesetzt,
+      // dann erneut versuchen.
+      if (input.value.trim() !== '') return;
+    }
   }
 
   function processTextNode(node) {
