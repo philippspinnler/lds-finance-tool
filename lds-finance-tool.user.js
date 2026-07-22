@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.10
+// @version      1.11
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -204,8 +204,16 @@
     return null;
   }
 
-  // Findet das Eingabefeld in der Formularzeile mit der angegebenen Beschriftung.
+  // Findet das Eingabefeld in der Formularzeile mit der angegebenen
+  // Beschriftung. Bevorzugt die stabilen data-qa-Marker des Spendenformulars,
+  // fällt sonst auf eine generische Textsuche zurück.
   function findRowInput(label) {
+    for (const row of document.querySelectorAll('section[data-qa="donationSlipRow"]')) {
+      const labelEl = row.querySelector('h3, [data-qa="categoryLabel"]');
+      if (!labelEl || labelEl.textContent.trim() !== label) continue;
+      const input = row.querySelector('input[data-qa="currencyInput"]:not([disabled])');
+      if (input) return input;
+    }
     for (const el of document.body.querySelectorAll('*')) {
       if (el.children.length > 0) continue;
       if (el.textContent.trim() !== label) continue;
@@ -218,17 +226,6 @@
       }
     }
     return null;
-  }
-
-  // Setzt den Wert so, dass auch React & Co. die Eingabe registrieren.
-  function setInputValue(input, value) {
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype, 'value'
-    ).set;
-    setter.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    input.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
   // --- Spender automatisch anhand des Namens suchen/auswählen ---
@@ -291,7 +288,7 @@
 
     // Nur bei eindeutigem, sicherem Treffer ausfüllen — sonst Feld leer lassen.
     if (SPENDER_AUTO_SELECT && unique && strong) {
-      setInputValue(input, best.value);
+      typeInputValue(input, best.value);
     }
   }
 
@@ -314,7 +311,7 @@
       const input = findRowInput(item.label);
       if (!input) { open = true; return; }
       if (input.value.trim() === '' && document.activeElement !== input) {
-        setInputValue(input, item.amount);
+        typeInputValue(input, item.amount);
       }
       item.done = true;
     });
