@@ -15,7 +15,10 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
 - **Beträge erkennen und eintragen**: Kürzel im Zweck-Text (z. B. `ZE 50` für
   Zehnter, `FO 20` für Fastopfer) werden erkannt und in die passenden
   Formularfelder eingetragen. Ergeben die Teilbeträge nicht den Gesamtbetrag,
-  erscheint eine Warnung.
+  erscheint eine Warnung. Der Gesamtbetrag wird nur dann automatisch dem
+  Standardfeld (Zehnter) zugeordnet, wenn der Zweck ein bekanntes Kürzel
+  enthält oder leer ist — sonstiger Freitext bleibt zur manuellen Zuordnung
+  offen.
 - **Verwendungszweck-Vorschläge**: Das Verwendungszweck-Feld erhält eine
   Auswahlliste („Spenden", „TN Beiträge für Veranstaltungen des Pfahles",
   „TN Beiträge für Veranstaltungen der Gemeinde"). **„Spenden" wird

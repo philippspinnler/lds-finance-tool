@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.7
+// @version      1.8
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -80,10 +80,19 @@
     let amounts = parseZweckAmounts(zweck);
     let mismatch = false;
     if (!amounts.length) {
-      // Kein Kürzel mit Betrag: Gesamtbetrag (erstes <Amt>) verwenden.
+      // Kein Kürzel mit Betrag: Gesamtbetrag (erstes <Amt>) nur dann
+      // automatisch eintragen, wenn der Zweck ein bekanntes Kürzel
+      // enthält oder leer ist. Sonstiger Freitext (z. B. ein Zweck, der
+      // kein Zehnter ist) bleibt zur manuellen Zuordnung offen.
       if (total !== null) {
-        const label = findKeyField(zweck) || DEFAULT_FIELD_LABEL;
-        amounts = [{ label, amount: total.toFixed(2), done: false }];
+        const keyLabel = findKeyField(zweck);
+        if (keyLabel || !zweck || !zweck.trim()) {
+          amounts = [{
+            label: keyLabel || DEFAULT_FIELD_LABEL,
+            amount: total.toFixed(2),
+            done: false,
+          }];
+        }
       }
     } else if (total !== null) {
       // Zweck-Beträge gegen den Gesamtbetrag prüfen.
