@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.9
+// @version      1.10
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -68,7 +68,7 @@
       recordEpoch++;
       // Automatik (Beträge wie Verwendungszweck-Standard) nur, wenn der
       // Zweck ein bekanntes Kürzel enthält oder leer ist.
-      recordZweckAutoOk = !zweck || !zweck.trim() || !!findKeyField(zweck);
+      recordZweckAutoOk = isEmptyZweck(zweck) || !!findKeyField(zweck);
       if (name) {
         const cleanName = name.split(' (')[0];
         setTimeout(() => trySelectSpender(cleanName), 300);
@@ -89,7 +89,7 @@
       // kein Zehnter ist) bleibt zur manuellen Zuordnung offen.
       if (total !== null) {
         const keyLabel = findKeyField(zweck);
-        if (keyLabel || !zweck || !zweck.trim()) {
+        if (keyLabel || isEmptyZweck(zweck)) {
           amounts = [{
             label: keyLabel || DEFAULT_FIELD_LABEL,
             amount: total.toFixed(2),
@@ -165,6 +165,16 @@
 
   // Fällt kein Kürzel-Treffer an, geht der Gesamtbetrag in dieses Feld.
   const DEFAULT_FIELD_LABEL = 'Zehnter';
+
+  // Zweck-Texte, die wie ein leerer Zweck behandelt werden
+  // (Platzhalter der Bank, z. B. "T .").
+  const EMPTY_ZWECK_PATTERNS = [/^T\s*\.?$/i];
+
+  function isEmptyZweck(zweck) {
+    if (!zweck || !zweck.trim()) return true;
+    const t = zweck.trim();
+    return EMPTY_ZWECK_PATTERNS.some((re) => re.test(t));
+  }
 
   function parseZweckAmounts(zweck) {
     if (!zweck) return [];
