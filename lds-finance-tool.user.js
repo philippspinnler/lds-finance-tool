@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.15
+// @version      1.16
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -346,8 +346,8 @@
 
   const VERWENDUNGSZWECK_OPTIONS = [
     'Spenden',
-    'TN Beiträge für Veranstaltungen des Pfahles',
-    'TN Beiträge für Veranstaltungen der Gemeinde',
+    'TN-Beiträge für Veranstaltungen des Pfahles',
+    'TN-Beiträge für Veranstaltungen der Gemeinde',
     'TN-Beiträge für Veranstaltungen des Gebietes',
   ];
   const DEFAULT_VERWENDUNGSZWECK = VERWENDUNGSZWECK_OPTIONS[0]; // 'Spenden'
