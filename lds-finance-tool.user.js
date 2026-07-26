@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.14
+// @version      1.15
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -30,13 +30,39 @@
     return values;
   }
 
+  // Ohne <Nm>: Personen aus Adresszeilen gewinnen, z. B.
+  // "<AdrLine>Herr ... u/o <AdrLine>Frau ...". Zeilen mit Ziffern
+  // (Strasse, PLZ/Ort) und einzelne Wörter ohne Anrede werden übersprungen.
+  function extractAdrNames(text) {
+    const persons = [];
+    for (const line of extractAll('AdrLine', text)) {
+      if (/\d/.test(line)) continue;
+      const hasSalutation =
+        /^\s*(?:Herrn?|Frau|Familie|Fam\.?|Eheleute)\b/i.test(line);
+      const cleaned = line
+        .replace(/^\s*(?:Herrn?|Frau|Familie|Fam\.?|Eheleute)\s+/i, '')
+        .replace(/\s*(?:u\/o|und|oder|u\.|o\.)\s*$/i, '')
+        .trim();
+      if (!cleaned) continue;
+      if (!hasSalutation && !cleaned.includes(' ')) continue;
+      persons.push(cleaned);
+    }
+    return persons;
+  }
+
   function extractName(text) {
     const names = extractAll('Nm', text);
-    if (!names.length) return null;
     if (names.length === 1) return names[0];
-    // Bei mehreren Nm-Werten steht die Person zuletzt (vor der Adresse),
-    // davor der Einzahlungskanal, z. B. "Schaltereinzahlung".
-    return names[names.length - 1] + ' (' + names.slice(0, -1).join(', ') + ')';
+    if (names.length > 1) {
+      // Bei mehreren Nm-Werten steht die Person zuletzt (vor der Adresse),
+      // davor der Einzahlungskanal, z. B. "Schaltereinzahlung".
+      return names[names.length - 1] + ' (' + names.slice(0, -1).join(', ') + ')';
+    }
+    const persons = extractAdrNames(text);
+    if (!persons.length) return null;
+    if (persons.length === 1) return persons[0];
+    // Erste Person zuerst (wird für die Spenderauswahl verwendet).
+    return persons[0] + ' (' + persons.slice(1).join(', ') + ')';
   }
 
   function buildReplacement(rawText) {
