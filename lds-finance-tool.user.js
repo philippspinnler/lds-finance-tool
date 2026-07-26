@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.13
+// @version      1.14
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -440,6 +440,11 @@
 
   function typeInputValue(input, value) {
     typingProgrammatically = true;
+    // Datalist während des Tippens abhängen: Firefox öffnet sonst beim
+    // programmatischen Fokus + Tippen das Vorschlags-Popup (z. B. die
+    // Spenderliste) und schließt es beim blur() nicht zuverlässig.
+    const listId = input.getAttribute('list');
+    if (listId) input.removeAttribute('list');
     try {
       const prev = document.activeElement;
       const setter = Object.getOwnPropertyDescriptor(
@@ -460,6 +465,7 @@
         prev.focus();
       }
     } finally {
+      if (listId) input.setAttribute('list', listId);
       typingProgrammatically = false;
     }
   }
