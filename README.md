@@ -23,8 +23,12 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
   Spendenlisten zum Abhaken) erscheint unten rechts ein Knopf
   „☑ Alle auswählen", der alle sichtbaren Checkboxen auf einmal anhakt.
 - **Verwendungszweck-Vorschläge**: Das Verwendungszweck-Feld erhält eine
-  Auswahlliste („Spenden", „TN Beiträge für Veranstaltungen des Pfahles",
-  „TN Beiträge für Veranstaltungen der Gemeinde"). **„Spenden" wird
+  eigene Auswahlliste („Spenden", „TN Beiträge für Veranstaltungen des
+  Pfahles", „TN Beiträge für Veranstaltungen der Gemeinde", „TN-Beiträge
+  für Veranstaltungen des Gebietes"). Die Liste wird vom Script selbst
+  gezeichnet, damit lange Einträge vollständig lesbar sind und nicht wie
+  im nativen Browser-Dropdown abgeschnitten werden; beim Tippen wird sie
+  gefiltert. **„Spenden" wird
   automatisch gesetzt, sobald das zugehörige Betrag-Feld einen Wert hat**
   (Verwendungszweck und Betrag sind auf der Seite ein Pflicht-Paar; ein
   bewusst geleertes Feld wird nicht erneut befüllt). Wie bei den Beträgen

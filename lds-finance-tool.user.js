@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.12
+// @version      1.13
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -322,33 +322,96 @@
     'Spenden',
     'TN Beiträge für Veranstaltungen des Pfahles',
     'TN Beiträge für Veranstaltungen der Gemeinde',
+    'TN-Beiträge für Veranstaltungen des Gebietes',
   ];
-  const DATALIST_ID = 'ubf-verwendungszweck-options';
   const DEFAULT_VERWENDUNGSZWECK = VERWENDUNGSZWECK_OPTIONS[0]; // 'Spenden'
 
-  function ensureDatalist() {
-    let dl = document.getElementById(DATALIST_ID);
-    if (!dl) {
-      dl = document.createElement('datalist');
-      dl.id = DATALIST_ID;
-      VERWENDUNGSZWECK_OPTIONS.forEach((text) => {
-        const opt = document.createElement('option');
-        opt.value = text;
-        dl.appendChild(opt);
-      });
-      document.body.appendChild(dl);
+  // Eigene Vorschlagsliste statt nativem <datalist>: dessen Aufklappmenü
+  // lässt sich nicht stylen und schneidet lange Einträge ab.
+  let vzPanel = null;
+  let vzPanelFor = null;
+
+  function hideVzPanel() {
+    if (vzPanel) {
+      vzPanel.remove();
+      vzPanel = null;
+      vzPanelFor = null;
     }
-    return dl;
   }
+
+  function showVzPanel(input) {
+    if (typingProgrammatically) return;
+    hideVzPanel();
+    const rect = input.getBoundingClientRect();
+    const panel = document.createElement('div');
+    Object.assign(panel.style, {
+      position: 'fixed',
+      left: rect.left + 'px',
+      top: rect.bottom + 2 + 'px',
+      minWidth: rect.width + 'px',
+      maxWidth: '90vw',
+      width: 'max-content',
+      background: '#fff',
+      color: '#212225',
+      border: '1px solid #a9adad',
+      borderRadius: '4px',
+      boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+      zIndex: '99999',
+      font: '400 14px sans-serif',
+    });
+    VERWENDUNGSZWECK_OPTIONS.forEach((text) => {
+      const item = document.createElement('div');
+      item.textContent = text;
+      Object.assign(item.style, {
+        padding: '8px 12px',
+        cursor: 'pointer',
+        whiteSpace: 'normal',
+      });
+      item.addEventListener('mouseenter', () => {
+        item.style.background = '#e9f7fc';
+      });
+      item.addEventListener('mouseleave', () => {
+        item.style.background = '';
+      });
+      // mousedown statt click: läuft vor dem blur des Eingabefelds.
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        typeInputValue(input, text);
+        hideVzPanel();
+      });
+      panel.appendChild(item);
+    });
+    document.body.appendChild(panel);
+    vzPanel = panel;
+    vzPanelFor = input;
+  }
+
+  function filterVzPanel(input) {
+    if (!vzPanel || vzPanelFor !== input) return;
+    const q = input.value.trim().toLowerCase();
+    Array.from(vzPanel.children).forEach((item) => {
+      item.style.display =
+        !q || item.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  }
+
+  window.addEventListener('scroll', hideVzPanel, true);
 
   function enhanceVerwendungszweckInputs(root) {
     const inputs = root.querySelectorAll('input[placeholder*="Verwendungszweck"]');
     if (!inputs.length) return;
-    ensureDatalist();
     inputs.forEach((input) => {
-      if (input.getAttribute('list') !== DATALIST_ID) {
-        input.setAttribute('list', DATALIST_ID);
+      if (!input.dataset.ubfPanelBound) {
+        input.dataset.ubfPanelBound = '1';
+        input.removeAttribute('list');
         input.autocomplete = 'off';
+        input.addEventListener('focus', () => showVzPanel(input));
+        input.addEventListener('click', () => showVzPanel(input));
+        input.addEventListener('blur', hideVzPanel);
+        input.addEventListener('input', () => {
+          if (typingProgrammatically) return;
+          filterVzPanel(input);
+        });
       }
       maybePrefillVerwendungszweck(input);
     });
@@ -372,24 +435,32 @@
   // sich der Wert aus seiner Sicht ändert. Zeigt das Feld denselben Text
   // bereits an (nur im DOM, nicht mehr im Zustand), wäre direktes Setzen
   // ein No-Op und der Zustand bliebe leer.
+  // Während das Script selbst tippt, keine Vorschlagsliste aufklappen.
+  let typingProgrammatically = false;
+
   function typeInputValue(input, value) {
-    const prev = document.activeElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype, 'value'
-    ).set;
-    input.focus();
-    setter.call(input, '');
-    input.dispatchEvent(new InputEvent('input', {
-      bubbles: true, inputType: 'deleteContentBackward',
-    }));
-    setter.call(input, value);
-    input.dispatchEvent(new InputEvent('input', {
-      bubbles: true, data: value, inputType: 'insertText',
-    }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    input.blur();
-    if (prev && prev !== document.body && typeof prev.focus === 'function') {
-      prev.focus();
+    typingProgrammatically = true;
+    try {
+      const prev = document.activeElement;
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      ).set;
+      input.focus();
+      setter.call(input, '');
+      input.dispatchEvent(new InputEvent('input', {
+        bubbles: true, inputType: 'deleteContentBackward',
+      }));
+      setter.call(input, value);
+      input.dispatchEvent(new InputEvent('input', {
+        bubbles: true, data: value, inputType: 'insertText',
+      }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.blur();
+      if (prev && prev !== document.body && typeof prev.focus === 'function') {
+        prev.focus();
+      }
+    } finally {
+      typingProgrammatically = false;
     }
   }
 
