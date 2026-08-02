@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.16
+// @version      1.17
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -106,7 +106,7 @@
       ? parseFloat(totalRaw.replace(',', '.'))
       : null;
 
-    let amounts = parseZweckAmounts(zweck);
+    let amounts = parseZweckAmounts(zweck, total);
     let mismatch = false;
     if (!amounts.length) {
       // Kein Kürzel mit Betrag: Gesamtbetrag (erstes <Amt>) nur dann
@@ -128,13 +128,18 @@
       const sum = amounts.reduce((s, a) => s + parseFloat(a.amount), 0);
       if (Math.abs(sum - total) > 0.005) {
         mismatch = true;
-        const others = amounts.filter((a) => a.label !== DEFAULT_FIELD_LABEL);
-        const rest = total - others.reduce((s, a) => s + parseFloat(a.amount), 0);
-        if (rest > 0) {
-          amounts = [
-            { label: DEFAULT_FIELD_LABEL, amount: rest.toFixed(2), done: false },
-            ...others,
-          ];
+        // Restbetrag nur dann ins Standardfeld legen, wenn der Zweck
+        // dafür keinen eigenen Betrag nennt. Ein explizit genannter
+        // Zehnter wird nie mit der Differenz überschrieben — die
+        // Warnung reicht, die Zuordnung bleibt Handarbeit.
+        if (!amounts.some((a) => a.label === DEFAULT_FIELD_LABEL)) {
+          const rest = total - sum;
+          if (rest > 0) {
+            amounts = [
+              { label: DEFAULT_FIELD_LABEL, amount: rest.toFixed(2), done: false },
+              ...amounts,
+            ];
+          }
         }
       }
     }
@@ -182,15 +187,26 @@
   }
 
   // Zuordnung: Kürzel im Zweck-Text -> Feldbeschriftung im Spendenformular.
-  // Zum Erweitern einfach Keys ergänzen oder neue Zeilen hinzufügen, z. B.:
-  //   { label: 'Humanitäre Hilfe', keys: ['HH'] },
+  // WICHTIG: label muss exakt der Zeilenbeschriftung im Formular entsprechen,
+  // sonst findet findRowInput() das Eingabefeld nicht.
+  // Zum Erweitern einfach Keys ergänzen oder neue Zeilen hinzufügen.
   const ZWECK_AMOUNT_FIELDS = [
     { label: 'Zehnter', keys: ['Z', 'ZE', 'ZEHNTEN', 'ZEHNTER'] },
     { label: 'Fastopfer', keys: ['FO', 'FASTOPFER'] },
+    { label: 'Humanitäre Hilfe', keys: ['HH', 'HF'] },
+    { label: 'Allgemeiner Missionarsfonds', keys: ['M', 'AM'] },
+    { label: 'Allgemeine Spenden', keys: ['BM'] },
   ];
 
   // Fällt kein Kürzel-Treffer an, geht der Gesamtbetrag in dieses Feld.
   const DEFAULT_FIELD_LABEL = 'Zehnter';
+
+  // Kürzel-Grenzen: links/rechts darf kein Buchstabe stehen, Ziffern sind
+  // aber erlaubt ("1175Z" zählt als Betrag+Kürzel). \b reicht dafür nicht,
+  // weil zwischen Ziffer und Buchstabe keine \b-Grenze liegt.
+  const KEY_BOUND_L = '(^|[^A-Za-zÄÖÜäöüß])';
+  const KEY_BOUND_R = '($|[^A-Za-zÄÖÜäöüß])';
+  const NUM_RE = '(\\d+(?:[.,]\\d{1,2})?)';
 
   // Zweck-Texte, die wie ein leerer Zweck behandelt werden
   // (Platzhalter der Bank, z. B. "T .").
@@ -202,16 +218,24 @@
     return EMPTY_ZWECK_PATTERNS.some((re) => re.test(t));
   }
 
-  function parseZweckAmounts(zweck) {
-    if (!zweck) return [];
+  // Ein Zweck-Text nutzt eine von zwei Schreibweisen:
+  //   keyFirst:    "Z 1350 FO 30 HH 20"  oder  "Z: 84/FO: 10/HF: 1"
+  //   amountFirst: "1175Z 60 FO 5 M 5 BM"  (Betrag steht vor dem Kürzel)
+  function parseZweckMode(zweck, mode) {
     const items = [];
     ZWECK_AMOUNT_FIELDS.forEach(({ label, keys }) => {
       for (const key of keys) {
-        const re = new RegExp('\\b' + key + '\\b\\s*:?\\s*(\\d+(?:[.,]\\d{1,2})?)', 'i');
+        const re = mode === 'keyFirst'
+          ? new RegExp(KEY_BOUND_L + key + '\\s*:?\\s*' + NUM_RE, 'i')
+          : new RegExp(NUM_RE + '\\s*' + key + KEY_BOUND_R, 'i');
         const m = zweck.match(re);
         if (m) {
-          const amount = parseFloat(m[1].replace(',', '.')).toFixed(2);
-          items.push({ label, amount, done: false });
+          const raw = mode === 'keyFirst' ? m[2] : m[1];
+          items.push({
+            label,
+            amount: parseFloat(raw.replace(',', '.')).toFixed(2),
+            done: false,
+          });
           break;
         }
       }
@@ -219,12 +243,27 @@
     return items;
   }
 
+  function parseZweckAmounts(zweck, total) {
+    if (!zweck) return [];
+    const keyFirst = parseZweckMode(zweck, 'keyFirst');
+    const amountFirst = parseZweckMode(zweck, 'amountFirst');
+    const sum = (arr) => arr.reduce((s, a) => s + parseFloat(a.amount), 0);
+    const fits = (arr) =>
+      total !== null && arr.length > 0 && Math.abs(sum(arr) - total) <= 0.005;
+    // Bevorzugt die Lesart, deren Summe den Gesamtbetrag ergibt;
+    // sonst die mit den meisten Treffern.
+    if (fits(keyFirst)) return keyFirst;
+    if (fits(amountFirst)) return amountFirst;
+    return amountFirst.length > keyFirst.length ? amountFirst : keyFirst;
+  }
+
   // Erkennt ein Kürzel ohne Betrag, z. B. "ZEHNTEN" oder "ZE Muster".
   function findKeyField(zweck) {
     if (!zweck) return null;
     for (const { label, keys } of ZWECK_AMOUNT_FIELDS) {
       for (const key of keys) {
-        if (new RegExp('\\b' + key + '\\b', 'i').test(zweck)) return label;
+        const re = new RegExp(KEY_BOUND_L + key + KEY_BOUND_R, 'i');
+        if (re.test(zweck)) return label;
       }
     }
     return null;
