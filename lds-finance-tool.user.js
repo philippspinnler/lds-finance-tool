@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.17
+// @version      1.18
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -194,7 +194,8 @@
     { label: 'Zehnter', keys: ['Z', 'ZE', 'ZEHNTEN', 'ZEHNTER'] },
     { label: 'Fastopfer', keys: ['FO', 'FASTOPFER'] },
     { label: 'Humanitäre Hilfe', keys: ['HH', 'HF'] },
-    { label: 'Allgemeiner Missionarsfonds', keys: ['M', 'AM'] },
+    { label: 'Gemeindemissionsfonds', keys: ['M'] },
+    { label: 'Allgemeiner Missionarsfonds', keys: ['AM'] },
     { label: 'Allgemeine Spenden', keys: ['BM'] },
   ];
 
