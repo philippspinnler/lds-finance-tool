@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.19
+// @version      1.20
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -192,7 +192,7 @@
   // Zum Erweitern einfach Keys ergänzen oder neue Zeilen hinzufügen.
   const ZWECK_AMOUNT_FIELDS = [
     { label: 'Zehnter', keys: ['Z', 'ZE', 'ZEHNTEN', 'ZEHNTER'] },
-    { label: 'Fastopfer', keys: ['FO', 'FASTOPFER'] },
+    { label: 'Fastopfer', keys: ['FO', 'FA', 'FASTOPFER'] },
     { label: 'Humanitäre Hilfe', keys: ['HH', 'HF'] },
     { label: 'Gemeindemissionsfonds', keys: ['M', 'GMF'] },
     { label: 'Allgemeiner Missionarsfonds', keys: ['AM'] },
@@ -220,14 +220,14 @@
   }
 
   // Ein Zweck-Text nutzt eine von zwei Schreibweisen:
-  //   keyFirst:    "Z 1350 FO 30 HH 20"  oder  "Z: 84/FO: 10/HF: 1"
+  //   keyFirst:    "Z 1350 FO 30 HH 20", "Z: 84/FO: 10/HF: 1" oder "Z-100 FA-20"
   //   amountFirst: "1175Z 60 FO 5 M 5 BM"  (Betrag steht vor dem Kürzel)
   function parseZweckMode(zweck, mode) {
     const items = [];
     ZWECK_AMOUNT_FIELDS.forEach(({ label, keys }) => {
       for (const key of keys) {
         const re = mode === 'keyFirst'
-          ? new RegExp(KEY_BOUND_L + key + '\\s*:?\\s*' + NUM_RE, 'i')
+          ? new RegExp(KEY_BOUND_L + key + '\\s*[:-]?\\s*' + NUM_RE, 'i')
           : new RegExp(NUM_RE + '\\s*' + key + KEY_BOUND_R, 'i');
         const m = zweck.match(re);
         if (m) {
