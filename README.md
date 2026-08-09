@@ -13,7 +13,8 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
   wird der passende Eintrag im Spender-Feld gesucht und – nur bei eindeutigem,
   sicherem Treffer – automatisch eingetragen.
 - **Beträge erkennen und eintragen**: Kürzel im Zweck-Text (z. B. `ZE 50` für
-  Zehnter, `FO 20` für Fastopfer) werden erkannt und in die passenden
+  Zehnter, `FO 20` für Fastopfer, `HH 10` für Humanitäre Hilfe) werden
+  erkannt und in die passenden
   Formularfelder eingetragen. Ergeben die Teilbeträge nicht den Gesamtbetrag,
   erscheint eine Warnung. Der Gesamtbetrag wird nur dann automatisch dem
   Standardfeld (Zehnter) zugeordnet, wenn der Zweck ein bekanntes Kürzel
@@ -61,7 +62,8 @@ bietet die Installation automatisch an.
 Direkt im Script anpassbar:
 
 - `ZWECK_AMOUNT_FIELDS`: Zuordnung von Kürzeln im Zweck-Text zu
-  Formularfeldern (Standard: Zehnter, Fastopfer). Weitere Felder lassen sich
+  Formularfeldern (Standard: Zehnter, Fastopfer, Humanitäre Hilfe). Weitere
+  Felder lassen sich
   als zusätzliche Zeilen ergänzen.
 - `DEFAULT_FIELD_LABEL`: Feld, in das der Gesamtbetrag fällt, wenn kein
   Kürzel erkannt wird (Standard: `Zehnter`).
