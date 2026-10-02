@@ -220,14 +220,14 @@
   }
 
   // Ein Zweck-Text nutzt eine von zwei Schreibweisen:
-  //   keyFirst:    "Z 1350 FO 30 HH 20", "Z: 84/FO: 10/HF: 1" oder "Z-100 FA-20"
+  //   keyFirst:    "Z 1350 FO 30 HH 20", "Z: 84/FO: 10/HF: 1", "Z-100 FA-20" oder "Z . 918.00 FO . 22.00"
   //   amountFirst: "1175Z 60 FO 5 M 5 BM"  (Betrag steht vor dem Kürzel)
   function parseZweckMode(zweck, mode) {
     const items = [];
     ZWECK_AMOUNT_FIELDS.forEach(({ label, keys }) => {
       for (const key of keys) {
         const re = mode === 'keyFirst'
-          ? new RegExp(KEY_BOUND_L + key + '\\s*[:-]?\\s*' + NUM_RE, 'i')
+          ? new RegExp(KEY_BOUND_L + key + '\\s*[:.-]?\\s*' + NUM_RE, 'i')
           : new RegExp(NUM_RE + '\\s*' + key + KEY_BOUND_R, 'i');
         const m = zweck.match(re);
         if (m) {
