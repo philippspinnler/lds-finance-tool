@@ -11,18 +11,51 @@ Ein Tampermonkey-Userscript, das die Spenden-Erfassung auf den Finanzseiten von
   aufklappbaren „raw"-Link erhalten.
 - **Spender automatisch auswählen**: Anhand des Namens aus der Beschreibung
   wird der passende Eintrag im Spender-Feld gesucht und – nur bei eindeutigem,
-  sicherem Treffer – automatisch eingetragen.
-- **Beträge erkennen und eintragen**: Kürzel im Zweck-Text (z. B. `ZE 50` für
-  Zehnter, `FO 20` für Fastopfer, `HH 10` für Humanitäre Hilfe) werden
-  erkannt und in die passenden
-  Formularfelder eingetragen. Ergeben die Teilbeträge nicht den Gesamtbetrag,
-  erscheint eine Warnung. Der Gesamtbetrag wird nur dann automatisch dem
-  Standardfeld (Zehnter) zugeordnet, wenn der Zweck ein bekanntes Kürzel
-  enthält oder leer ist — sonstiger Freitext bleibt zur manuellen Zuordnung
-  offen.
+  sicherem Treffer – automatisch eingetragen. Der Vergleich ist tolerant:
+  - ein Tippfehler pro Namensteil (ab 5 Buchstaben), z. B. `Michael` /
+    `Micheal`;
+  - ausgeschriebene Umlaute und fehlende Akzente (`Maeder` = `Mäder`,
+    `Rene` = `René`);
+  - bei Gleichstand gewinnt der Eintrag, dessen Rufname (erster Vorname)
+    passt;
+  - steht im Zweck ein anderer Vorname (z. B. Name `Hans Muster`, Zweck
+    `Anna Zehnten`), wird die Person mit diesem Vornamen und dem Nachnamen
+    des Einzahlers gewählt.
+- **Beträge erkennen und eintragen**: Kürzel im Zweck-Text werden erkannt und
+  in die passenden Formularfelder eingetragen:
+
+  | Kürzel | Feld |
+  |---|---|
+  | `Z`, `ZE`, `ZEHNTEN`, `ZEHNTER` | Zehnter |
+  | `FO`, `FA`, `FASTOPFER` | Fastopfer |
+  | `HH`, `HF` | Humanitäre Hilfe |
+  | `M`, `GMF` | Gemeindemissionsfonds |
+  | `AM` | Allgemeiner Missionsfonds |
+  | `BM` | Allgemeine Spenden |
+
+  Verstandene Schreibweisen: `Z 100 FO 20`, `Z: 100/FO: 20`, `Z-100`,
+  `Z = 100`, `Z . 100.00`, `Z: CHF 100.-`, `Z Oktober 100,--` (ein Wort
+  zwischen Kürzel und Betrag) sowie Betrag vor dem Kürzel (`100Z 20 FO`).
+
+  Der Gesamtbetrag wird nur dann automatisch dem Standardfeld (Zehnter)
+  zugeordnet, wenn der Zweck ein bekanntes Kürzel enthält oder leer ist —
+  sonstiger Freitext bleibt zur manuellen Zuordnung offen. Als leer gelten
+  auch die Bank-Platzhalter `T .`, `T =` und `T -`.
+- **Warnungen**: Ergeben die Teilbeträge nicht den Gesamtbetrag, erscheint
+  eine Warnung. Ebenso, wenn ein Kürzel gefunden wurde, im Zweck aber Zahlen
+  stehen, die nicht als Betrag gelesen werden konnten (Jahreszahlen
+  ausgenommen).
+- **Farbmarkierung**: Jeder erkannte Betrag wird im Zweck-Text farbig
+  hinterlegt; das befüllte Formularfeld erhält dieselbe Farbe. So ist auf
+  einen Blick sichtbar, welcher Betrag wo eingetragen wurde.
+- **Unterkonto auswählen**: Hat ein Fonds mehrere Konten (z. B. zwei
+  Gemeindemissionskonten), erscheint das Betragsfeld erst nach der Auswahl
+  im Kategorie-Feld. Das Script wählt das Konto, dessen Name exakt der
+  Feldbeschriftung entspricht, und trägt dann den Betrag ein.
 - **Alle Checkboxen anhaken**: Auf Seiten mit mehreren Checkboxen (z. B.
   Spendenlisten zum Abhaken) erscheint unten rechts ein Knopf
-  „☑ Alle auswählen", der alle sichtbaren Checkboxen auf einmal anhakt.
+  „☑ Alle auswählen", der alle sichtbaren Checkboxen auf einmal anhakt und
+  danach ans Seitenende springt.
 - **Verwendungszweck-Vorschläge**: Das Verwendungszweck-Feld erhält eine
   eigene Auswahlliste („Spenden", „TN-Beiträge für Veranstaltungen des
   Pfahles", „TN-Beiträge für Veranstaltungen der Gemeinde", „TN-Beiträge
@@ -62,13 +95,11 @@ bietet die Installation automatisch an.
 Direkt im Script anpassbar:
 
 - `ZWECK_AMOUNT_FIELDS`: Zuordnung von Kürzeln im Zweck-Text zu
-  Formularfeldern (Standard: Zehnter, Fastopfer, Humanitäre Hilfe). Weitere
-  Felder lassen sich
-  als zusätzliche Zeilen ergänzen.
+  Formularfeldern samt Markierungsfarbe (`color`). Weitere Felder lassen
+  sich als zusätzliche Zeilen ergänzen; `label` muss exakt der
+  Zeilenbeschriftung im Formular entsprechen.
 - `DEFAULT_FIELD_LABEL`: Feld, in das der Gesamtbetrag fällt, wenn kein
   Kürzel erkannt wird (Standard: `Zehnter`).
-- `SPENDER_AUTO_SELECT`: Auf `false` setzen, wenn der Spendername nur ins
-  Suchfeld getippt, aber nicht automatisch ausgewählt werden soll.
 - `VERWENDUNGSZWECK_OPTIONS`: Die Vorschlagsliste für das
   Verwendungszweck-Feld; der erste Eintrag ist der Standardwert.
 
