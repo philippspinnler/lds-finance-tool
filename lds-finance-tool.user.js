@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spenden: Beschreibung lesbar machen
 // @namespace    local.philipp.spenden
-// @version      1.20
+// @version      1.34
 // @description  Formatiert das ISO-20022-Beschreibungsfeld: zeigt Name/Zweck, Original hinter "raw"-Link
 // @match        https://*.churchofjesuschrist.org/*
 // @grant        none
@@ -14,11 +14,6 @@
 
   const MARKER_CLASS = 'ubf-formatted';
 
-  function extract(tag, text) {
-    const m = text.match(new RegExp('<' + tag + '>([^<]*)'));
-    return m ? m[1].trim() : null;
-  }
-
   function extractAll(tag, text) {
     const values = [];
     const re = new RegExp('<' + tag + '>([^<]*)', 'g');
@@ -28,6 +23,11 @@
       if (v) values.push(v);
     }
     return values;
+  }
+
+  // Erster nicht-leerer Wert des Tags oder null.
+  function extract(tag, text) {
+    return extractAll(tag, text)[0] || null;
   }
 
   // Ohne <Nm>: Personen aus Adresszeilen gewinnen, z. B.
@@ -84,20 +84,22 @@
       line.appendChild(b);
       line.appendChild(document.createTextNode(value));
       wrap.appendChild(line);
+      return line;
     };
 
     addLine('Name', name);
-    addLine('Zweck', zweck);
+    const zweckLine = addLine('Zweck', zweck);
 
     if (rawText !== lastSpenderRaw) {
       lastSpenderRaw = rawText;
       recordEpoch++;
+      clearInputColors();
       // Automatik (Beträge wie Verwendungszweck-Standard) nur, wenn der
       // Zweck ein bekanntes Kürzel enthält oder leer ist.
       recordZweckAutoOk = isEmptyZweck(zweck) || !!findKeyField(zweck);
       if (name) {
         const cleanName = name.split(' (')[0];
-        setTimeout(() => trySelectSpender(cleanName), 300);
+        setTimeout(() => trySelectSpender(cleanName, zweck), 300);
       }
     }
 
@@ -108,6 +110,7 @@
 
     let amounts = parseZweckAmounts(zweck, total);
     let mismatch = false;
+    let unread = false;
     if (!amounts.length) {
       // Kein Kürzel mit Betrag: Gesamtbetrag (erstes <Amt>) nur dann
       // automatisch eintragen, wenn der Zweck ein bekanntes Kürzel
@@ -121,6 +124,7 @@
             amount: total.toFixed(2),
             done: false,
           }];
+          unread = hasUnreadNumbers(zweck, total);
         }
       }
     } else if (total !== null) {
@@ -144,6 +148,7 @@
       }
     }
     if (amounts.length) {
+      if (zweckLine) highlightZweck(zweckLine, zweck, amounts);
       pendingAmounts = amounts;
       const hint = document.createElement('span');
       hint.style.display = 'block';
@@ -153,14 +158,15 @@
         amounts.map((a) => a.label + ' ' + a.amount).join(' · ');
       wrap.appendChild(hint);
     }
-    if (mismatch) {
+    if (mismatch || unread) {
       const warn = document.createElement('span');
       warn.style.display = 'block';
       warn.style.color = '#a94442';
       warn.style.fontWeight = 'bold';
       warn.style.fontSize = '0.9em';
-      warn.textContent =
-        '⚠ Die Zweck-Beträge ergeben nicht den Gesamtbetrag – bitte prüfen!';
+      warn.textContent = mismatch
+        ? '⚠ Die Zweck-Beträge ergeben nicht den Gesamtbetrag – bitte prüfen!'
+        : '⚠ Zahlen im Zweck konnten nicht als Betrag gelesen werden – bitte prüfen!';
       wrap.appendChild(warn);
     }
 
@@ -191,13 +197,55 @@
   // sonst findet findRowInput() das Eingabefeld nicht.
   // Zum Erweitern einfach Keys ergänzen oder neue Zeilen hinzufügen.
   const ZWECK_AMOUNT_FIELDS = [
-    { label: 'Zehnter', keys: ['Z', 'ZE', 'ZEHNTEN', 'ZEHNTER'] },
-    { label: 'Fastopfer', keys: ['FO', 'FA', 'FASTOPFER'] },
-    { label: 'Humanitäre Hilfe', keys: ['HH', 'HF'] },
-    { label: 'Gemeindemissionsfonds', keys: ['M', 'GMF'] },
-    { label: 'Allgemeiner Missionarsfonds', keys: ['AM'] },
-    { label: 'Allgemeine Spenden', keys: ['BM'] },
+    { label: 'Zehnter', keys: ['Z', 'ZE', 'ZEHNTEN', 'ZEHNTER'], color: '#fff3a3' },
+    { label: 'Fastopfer', keys: ['FO', 'FA', 'FASTOPFER'], color: '#b9e6ff' },
+    { label: 'Humanitäre Hilfe', keys: ['HH', 'HF'], color: '#c9f0c0' },
+    { label: 'Gemeindemissionsfonds', keys: ['M', 'GMF'], color: '#ffd3a8' },
+    { label: 'Allgemeiner Missionsfonds', keys: ['AM'], color: '#e3ccff' },
+    { label: 'Allgemeine Spenden', keys: ['BM'], color: '#ffc9de' },
   ];
+
+  // color: Hintergrundfarbe, mit der der Betrag im Zweck-Text und das
+  // befüllte Eingabefeld markiert werden (gleiche Farbe = gleicher Betrag).
+  function fieldColor(label) {
+    const field = ZWECK_AMOUNT_FIELDS.find((f) => f.label === label);
+    return field ? field.color : '';
+  }
+
+  // Ersetzt den Zweck-Text der Zeile durch eine Fassung, in der die
+  // erkannten Beträge farbig hinterlegt sind.
+  function highlightZweck(line, zweck, amounts) {
+    const marks = amounts
+      .filter((a) => a.range)
+      .sort((a, b) => a.range[0] - b.range[0]);
+    if (!marks.length) return;
+    line.lastChild.remove();
+    let pos = 0;
+    for (const a of marks) {
+      if (a.range[0] < pos) continue;
+      line.append(zweck.slice(pos, a.range[0]));
+      const mark = document.createElement('span');
+      mark.textContent = zweck.slice(a.range[0], a.range[1]);
+      mark.title = a.label;
+      Object.assign(mark.style, {
+        background: fieldColor(a.label),
+        borderRadius: '3px',
+        padding: '0 3px',
+      });
+      line.append(mark);
+      pos = a.range[1];
+    }
+    line.append(zweck.slice(pos));
+  }
+
+  // Vom Script eingefärbte Betragsfelder; beim Datensatz-Wechsel
+  // zurückgesetzt, weil die Seite dieselben Felder weiterverwendet.
+  const coloredInputs = new Set();
+
+  function clearInputColors() {
+    coloredInputs.forEach((input) => { input.style.backgroundColor = ''; });
+    coloredInputs.clear();
+  }
 
   // Fällt kein Kürzel-Treffer an, geht der Gesamtbetrag in dieses Feld.
   const DEFAULT_FIELD_LABEL = 'Zehnter';
@@ -210,38 +258,61 @@
   const NUM_RE = '(\\d+(?:[.,]\\d{1,2})?)';
 
   // Zweck-Texte, die wie ein leerer Zweck behandelt werden
-  // (Platzhalter der Bank, z. B. "T .").
-  const EMPTY_ZWECK_PATTERNS = [/^T\s*\.?$/i];
+  // (Platzhalter der Bank, z. B. "T .", "T =" oder "T -").
+  const EMPTY_ZWECK_RE = /^T\s*[.=-]?$/i;
 
   function isEmptyZweck(zweck) {
-    if (!zweck || !zweck.trim()) return true;
-    const t = zweck.trim();
-    return EMPTY_ZWECK_PATTERNS.some((re) => re.test(t));
+    const t = (zweck || '').trim();
+    return !t || EMPTY_ZWECK_RE.test(t);
   }
 
   // Ein Zweck-Text nutzt eine von zwei Schreibweisen:
   //   keyFirst:    "Z 1350 FO 30 HH 20", "Z: 84/FO: 10/HF: 1", "Z-100 FA-20" oder "Z . 918.00 FO . 22.00"
   //   amountFirst: "1175Z 60 FO 5 M 5 BM"  (Betrag steht vor dem Kürzel)
+  //   keyWord:     "Z Oktober 100,-- FO 20.--"  (wie keyFirst, aber mit
+  //                einem Wort zwischen Kürzel und Betrag; gilt nur, wenn
+  //                die Summe den Gesamtbetrag ergibt)
+  // Optionale Währungsangabe vor dem Betrag: "Z: CHF 100.-, FO CHF 20.-".
+  const CURRENCY_RE = '(?:(?:CHF|SFR|FR)\\.?\\s*)?';
+  const WORD_RE = '(?:[A-Za-zÄÖÜäöüß]+\\.?\\s+)?';
   function parseZweckMode(zweck, mode) {
     const items = [];
     ZWECK_AMOUNT_FIELDS.forEach(({ label, keys }) => {
       for (const key of keys) {
-        const re = mode === 'keyFirst'
-          ? new RegExp(KEY_BOUND_L + key + '\\s*[:.-]?\\s*' + NUM_RE, 'i')
-          : new RegExp(NUM_RE + '\\s*' + key + KEY_BOUND_R, 'i');
+        const re = mode === 'amountFirst'
+          ? new RegExp(NUM_RE + '\\s*' + key + KEY_BOUND_R, 'di')
+          : new RegExp(
+              KEY_BOUND_L + key + '\\s*[:.=-]?\\s*' +
+              (mode === 'keyWord' ? WORD_RE : '') + CURRENCY_RE + NUM_RE, 'di'
+            );
         const m = zweck.match(re);
         if (m) {
-          const raw = mode === 'keyFirst' ? m[2] : m[1];
+          const group = mode === 'amountFirst' ? 1 : 2;
+          const raw = m[group];
+          // Position des Betrags im Text (inkl. Anhängsel wie ".-" / ",--").
+          const [start, end] = m.indices[group];
+          const tail = zweck.slice(end).match(/^[.,]-+/);
           items.push({
             label,
             amount: parseFloat(raw.replace(',', '.')).toFixed(2),
             done: false,
+            range: [start, end + (tail ? tail[0].length : 0)],
           });
           break;
         }
       }
     });
     return items;
+  }
+
+  // Enthält der Zweck Zahlen, die nicht dem Gesamtbetrag entsprechen?
+  // (Jahreszahlen wie "Zehnten Oktober 2026" zählen nicht.) Dient als
+  // Warnsignal, wenn kein Betrag gelesen werden konnte.
+  function hasUnreadNumbers(zweck, total) {
+    const nums = (zweck || '')
+      .replace(/\b(?:19|20)\d{2}\b/g, '')
+      .match(/\d+(?:[.,]\d{1,2})?/g) || [];
+    return nums.some((n) => Math.abs(parseFloat(n.replace(',', '.')) - total) > 0.005);
   }
 
   function parseZweckAmounts(zweck, total) {
@@ -255,6 +326,8 @@
     // sonst die mit den meisten Treffern.
     if (fits(keyFirst)) return keyFirst;
     if (fits(amountFirst)) return amountFirst;
+    const keyWord = parseZweckMode(zweck, 'keyWord');
+    if (fits(keyWord)) return keyWord;
     return amountFirst.length > keyFirst.length ? amountFirst : keyFirst;
   }
 
@@ -295,8 +368,6 @@
   }
 
   // --- Spender automatisch anhand des Namens suchen/auswählen ---
-  // false: nur den Namen ins Suchfeld tippen, Auswahl bleibt manuell.
-  const SPENDER_AUTO_SELECT = true;
 
   function findSpenderInput() {
     return (
@@ -305,22 +376,100 @@
     );
   }
 
+  // Umlaute werden ausgeschrieben ("Mäder" = "Maeder"), übrige
+  // Akzente entfernt ("René" = "Rene"), da Banken Namen oft so liefern.
   function nameTokens(text) {
     return text
       .toLowerCase()
+      .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .split(/[^a-zà-öø-ÿß']+/)
       .filter((t) => t.length >= 2 && t !== 'und');
   }
 
+  // Tippfehler-Toleranz: höchstens eine Abweichung (ein Buchstabe anders,
+  // zu viel, zu wenig oder zwei benachbarte vertauscht, z. B.
+  // "Michael"/"Micheal"). Nur für Namen ab 5 Buchstaben.
+  function nearMatch(a, b) {
+    if (Math.min(a.length, b.length) < 5) return false;
+    let i = 0;
+    while (i < a.length && a[i] === b[i]) i++;
+    return (
+      a.slice(i + 1) === b.slice(i + 1) ||
+      a.slice(i + 1) === b.slice(i) ||
+      a.slice(i) === b.slice(i + 1) ||
+      (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2))
+    );
+  }
+
+  // Punkte pro Namensteil: exakt = 10, mit Tippfehler = 9. So gewinnt bei
+  // "Andrea"/"Andreas" weiterhin der exakte Treffer.
+  const EXACT_HIT = 10;
+  const NEAR_HIT = 9;
+
+  // Passt der Rufname (erster Vorname nach dem Komma), gibt es einen
+  // Zusatzpunkt: "Muster Hans" meint eher "Muster, Hans Peter" als
+  // "Muster, Karl Hans".
+  const FIRST_NAME_BONUS = 1;
+
   function optionHits(optionText, bankTokens) {
-    return nameTokens(optionText).filter((t) => bankTokens.includes(t)).length;
+    const hit = (t) => {
+      if (bankTokens.includes(t)) return EXACT_HIT;
+      return bankTokens.some((b) => nearMatch(t, b)) ? NEAR_HIT : 0;
+    };
+    const firstName = nameTokens(optionText.split(',')[1] || '')[0];
+    const bonus = firstName && hit(firstName) ? FIRST_NAME_BONUS : 0;
+    return nameTokens(optionText).reduce((sum, t) => sum + hit(t), bonus);
   }
 
   function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async function trySelectSpender(name) {
+  // Wählt den Spender aus der Liste; null, wenn kein eindeutiger, sicherer
+  // Treffer. Steht im Zweck ein Name, der nicht zum Einzahler gehört
+  // (z. B. Name "Hans Muster", Zweck "Anna Zehnten"), ist die Spende für
+  // diese Person gedacht: dann zählen nur Einträge, die sowohl zum Zweck
+  // (Vorname) als auch zum Einzahler (Nachname) passen.
+  function pickSpender(options, name, zweck) {
+    const bankTokens = nameTokens(name);
+    if (!bankTokens.length) return null;
+
+    const keys = ZWECK_AMOUNT_FIELDS.flatMap((f) => f.keys).map((k) => k.toLowerCase());
+    const zweckTokens = nameTokens(zweck || '').filter(
+      (t) => !keys.includes(t) && !bankTokens.includes(t)
+    );
+
+    const all = options.map((value) => ({
+      value,
+      hits: optionHits(value, bankTokens),
+      zweckHits: optionHits(value, zweckTokens),
+      total: nameTokens(value).length,
+    }));
+    const best = (list) => {
+      const top = Math.max(...list.map((s) => s.hits));
+      const winners = list.filter((s) => s.hits === top);
+      return winners.length === 1 ? winners[0] : null;
+    };
+
+    const forOther = all
+      .filter((s) => s.hits > 0 && s.zweckHits > 0)
+      .map((s) => ({ ...s, hits: s.hits + s.zweckHits }));
+    if (forOther.length) {
+      // Mehrdeutig (z. B. zwei "Anna Muster"): lieber leer lassen.
+      const b = best(forOther);
+      return b ? b.value : null;
+    }
+
+    const scored = all.filter((s) => s.hits > 0);
+    if (!scored.length) return null;
+    const b = best(scored);
+    const strong =
+      b && (b.hits >= 2 * NEAR_HIT || b.hits >= b.total * EXACT_HIT);
+    return strong ? b.value : null;
+  }
+
+  async function trySelectSpender(name, zweck) {
     const input = findSpenderInput();
     if (!input || input.value.trim()) return;
 
@@ -335,27 +484,10 @@
     }
     if (!datalist || !datalist.options.length || input.value.trim()) return;
 
-    const bankTokens = nameTokens(name);
-    if (!bankTokens.length) return;
-
-    const scored = Array.from(datalist.options)
-      .map((opt) => ({
-        value: opt.value,
-        hits: optionHits(opt.value, bankTokens),
-        total: nameTokens(opt.value).length,
-      }))
-      .filter((s) => s.hits > 0)
-      .sort((a, b) => b.hits - a.hits);
-    if (!scored.length) return;
-
-    const best = scored[0];
-    const unique = scored.filter((s) => s.hits === best.hits).length === 1;
-    const strong = best.hits >= 2 || best.hits === best.total;
-
-    // Nur bei eindeutigem, sicherem Treffer ausfüllen — sonst Feld leer lassen.
-    if (SPENDER_AUTO_SELECT && unique && strong) {
-      typeInputValue(input, best.value);
-    }
+    const value = pickSpender(
+      Array.from(datalist.options).map((opt) => opt.value), name, zweck
+    );
+    if (value) typeInputValue(input, value);
   }
 
   let lastSpenderRaw = null;
@@ -369,15 +501,49 @@
 
   let pendingAmounts = null;
 
+  // Gibt es zu einer Kategorie mehrere Unterkonten (z. B. zwei
+  // Gemeindemissionskonten), erscheint das Betragsfeld erst, nachdem das
+  // Konto im Kategorie-Feld (Eingabefeld mit <datalist>) gewählt wurde.
+  // Optionen lauten "<Kategorie>: <Konto>[: <Unterkonto>]"; gewählt wird
+  // die, deren letzter Teil exakt der Beschriftung entspricht. Der
+  // Kategorie-Präfix ist sprachabhängig ("Ward Missionary"), der Kontoname
+  // nicht.
+  function selectSubAccount(label) {
+    for (const input of document.querySelectorAll('input[data-qa="categorySelector"]')) {
+      const listId = input.getAttribute('list');
+      const datalist = listId ? document.getElementById(listId) : null;
+      if (!datalist) continue;
+      const opt = Array.from(datalist.options).find(
+        (o) => o.value.split(': ').pop().trim() === label
+      );
+      if (!opt) continue;
+      typeInputValue(input, opt.value);
+      return true;
+    }
+    return false;
+  }
+
   function attemptFill() {
     if (!pendingAmounts) return;
     let open = false;
     pendingAmounts.forEach((item) => {
       if (item.done) return;
       const input = findRowInput(item.label);
-      if (!input) { open = true; return; }
+      if (!input) {
+        // Zeile evtl. erst nach Auswahl im Unterkonto-Dropdown vorhanden;
+        // das Feld wird dann beim nächsten Durchlauf befüllt.
+        if (!item.selected) item.selected = selectSubAccount(item.label);
+        open = true;
+        return;
+      }
       if (input.value.trim() === '' && document.activeElement !== input) {
         typeInputValue(input, item.amount);
+      }
+      // Nur einfärben, wenn im Feld wirklich dieser Betrag steht.
+      const digits = (v) => v.replace(/\D/g, '');
+      if (digits(input.value) === digits(item.amount)) {
+        input.style.backgroundColor = fieldColor(item.label);
+        coloredInputs.add(input);
       }
       item.done = true;
     });
@@ -463,9 +629,8 @@
 
   window.addEventListener('scroll', hideVzPanel, true);
 
-  function enhanceVerwendungszweckInputs(root) {
-    const inputs = root.querySelectorAll('input[placeholder*="Verwendungszweck"]');
-    if (!inputs.length) return;
+  function enhanceVerwendungszweckInputs() {
+    const inputs = document.querySelectorAll('input[placeholder*="Verwendungszweck"]');
     inputs.forEach((input) => {
       if (!input.dataset.ubfPanelBound) {
         input.dataset.ubfPanelBound = '1';
@@ -641,6 +806,8 @@
       checkableBoxes().forEach((cb) => {
         if (!cb.checked) cb.click();
       });
+      // Danach direkt ans Seitenende (dort geht es weiter).
+      window.scrollTo(0, document.documentElement.scrollHeight);
     });
     document.body.appendChild(btn);
   }
@@ -657,15 +824,15 @@
     if (replacement) node.replaceWith(replacement);
   }
 
-  function scan(root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  function scan() {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const hits = [];
     let n;
     while ((n = walker.nextNode())) {
       if (n.nodeValue && n.nodeValue.includes('<')) hits.push(n);
     }
     hits.forEach(processTextNode);
-    enhanceVerwendungszweckInputs(root);
+    enhanceVerwendungszweckInputs();
     attemptFill();
     updateCheckAllButton();
   }
@@ -676,11 +843,11 @@
     scheduled = true;
     requestAnimationFrame(() => {
       scheduled = false;
-      scan(document.body);
+      scan();
     });
   }
 
-  scan(document.body);
+  scan();
   new MutationObserver(scheduleScan).observe(document.body, {
     childList: true,
     subtree: true,
